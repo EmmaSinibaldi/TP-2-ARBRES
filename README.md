@@ -9,4 +9,7 @@
 - TP2_ARBRES.qmd : compte rendu du TP avec le script complété
 - TP2_ARBRES.html : compte rendu du TP en html
 
+  
+# Installation
+
   Le fichier TP2_ARBRES peut-être ouvert dans un nivagateur. Sinon, le fichier TP2_ARBRES peut-être exécuté dans VScode.
