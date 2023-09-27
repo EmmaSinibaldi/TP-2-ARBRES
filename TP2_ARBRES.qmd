@@ -1,0 +1,524 @@
+---
+title: "TP2 : Arbres"
+author: "Emma Sinibaldi"
+toc: true
+format:
+  html:
+    html-math-method: katex
+    code-tools: true
+    self-contained: true
+execute:
+  warning: false
+---
+
+
+## TP 2 : Arbres
+
+# FICHIER SOURCE
+
+```{python}
+# -*- coding: utf-8 -*-
+"""
+@author: J. Salmon, A. Sabourin, A. Gramfort
+"""
+
+############################################################################
+#                Import part
+############################################################################
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+from math import fmod
+import seaborn as sns
+
+############################################################################
+#                Data Generation
+############################################################################
+
+
+def rand_gauss(n=100, mu=[1, 1], sigma=[0.1, 0.1]):
+    """ Sample n points from a Gaussian variable with center mu,
+    and std deviation sigma
+    """
+    d = len(mu)
+    res = np.random.randn(n, d)
+    return np.array(res * sigma + mu)
+
+
+def rand_bi_gauss(n1=100, n2=100, mu1=[1, 1], mu2=[-1, -1], sigma1=[0.1, 0.1],
+                  sigma2=[0.1, 0.1]):
+    """ Sample n1 and n2 points from two Gaussian variables centered in mu1,
+    mu2, with std deviation sigma1, sigma2
+    """
+    ex1 = rand_gauss(n1, mu1, sigma1)
+    ex2 = rand_gauss(n2, mu2, sigma2)
+    res = np.vstack([np.hstack([ex1, 1. * np.ones((n1, 1))]),
+                     np.hstack([ex2, 2. * np.ones((n2, 1))])])
+    ind = np.arange(res.shape[0])
+    np.random.shuffle(ind)
+    return np.array(res[ind, :])
+
+
+def rand_tri_gauss(n1=100, n2=100, n3=100, mu1=[1, 1],
+                   mu2=[-1, -1], mu3=[1, -1], sigma1=[0.1, 0.1],
+                   sigma2=[0.1, 0.1], sigma3=[0.1, 0.1]):
+    """ Sample n1, n2 and n3 points from three Gaussian variables centered in mu1,
+    mu2 and mu3 with std deviation sigma1, sigma2 and sigma3
+    """
+    ex1 = rand_gauss(n1, mu1, sigma1)
+    ex2 = rand_gauss(n2, mu2, sigma2)
+    ex3 = rand_gauss(n3, mu3, sigma3)
+    res = np.vstack([np.hstack([ex1, 1. * np.ones((n1, 1))]),
+                     np.hstack([ex2, 2. * np.ones((n2, 1))]),
+                     np.hstack([ex3, 3. * np.ones((n3, 1))])])
+    ind = np.arange(res.shape[0])
+    np.random.shuffle(ind)
+    return np.array(res[ind, :])
+
+
+def rand_clown(n1=100, n2=100, sigma1=1, sigma2=2):
+    """ Sample a dataset clown  with
+    n1 points and noise std deviation sigma1 for the first class, and
+    n2 points and noise std deviation sigma2 for the second one
+    """
+    x0 = np.random.randn(n1)
+    x1 = x0 * x0 + sigma1 * np.random.randn(n1)
+    x2 = np.vstack([sigma2 * np.random.randn(n2),
+                    sigma2 * np.random.randn(n2) + 2.])
+    res = np.hstack([np.vstack([[x0, x1], 1. * np.ones([1, n1])]),
+                     np.vstack([x2, 2. * np.ones([1, n2])])]).T
+    ind = np.arange(res.shape[0])
+    np.random.shuffle(ind)
+    return np.array(res[ind, :])
+
+
+def rand_checkers(n1=100, n2=100, n3=100, n4=100, sigma=0.1):
+    """ Sample n1 and n2 points from a noisy checker"""
+    nb1 = n1 // 8
+    nb2 = n2 // 8
+    nb3 = n3 // 8
+    nb4 = n4 // 8
+
+    xapp = np.reshape(np.zeros((nb1 + nb2 + nb3 + nb4) * 16),
+                      [(nb1 + nb2 + nb3 + nb4) * 8, 2])
+    yapp = np.ones((nb1 + nb2 + nb3 + nb4) * 8)
+    idx = 0
+    nb = 2 * nb1
+    for i in range(-2, 2):
+        for j in range(-2, 2):
+            yapp[idx:(idx + nb)] = [fmod(i - j + 100, 4)] * nb
+            xapp[idx:(idx + nb), 0] = np.random.rand(nb)
+            xapp[idx:(idx + nb), 0] += i + sigma * np.random.randn(nb)
+            xapp[idx:(idx + nb), 1] = np.random.rand(nb)
+            xapp[idx:(idx + nb), 1] += j + sigma * np.random.randn(nb)
+            idx += nb
+
+    ind = np.arange((nb1 + nb2 + nb3 + nb4) * 8)
+    np.random.shuffle(ind)
+    res = np.hstack([xapp, yapp[:, np.newaxis]])
+    return np.array(res[ind, :])
+
+
+############################################################################
+#            Displaying labeled data
+############################################################################
+symlist = ['o', 's', 'D', 'x', '+', '*', 'p', 'v', '-', '^']
+
+
+def plot_2d(data, y=None, w=None, alpha_choice=1):
+    """ Plot in 2D the dataset data, colors and symbols according to the
+    class given by the vector y (if given); the separating hyperplan w can
+    also be displayed if asked"""
+
+    k = np.unique(y).shape[0]
+    color_blind_list = sns.color_palette("colorblind", k)
+    sns.set_palette(color_blind_list)
+    if y is None:
+        labs = [""]
+        idxbyclass = [range(data.shape[0])]
+    else:
+        labs = np.unique(y)
+        idxbyclass = [np.where(y == labs[i])[0] for i in range(len(labs))]
+
+    for i in range(len(labs)):
+        plt.scatter(data[idxbyclass[i], 0], data[idxbyclass[i], 1],
+                    color=color_blind_list[i], s=80, marker=symlist[i])
+    plt.ylim([np.min(data[:, 1]), np.max(data[:, 1])])
+    plt.xlim([np.min(data[:, 0]), np.max(data[:, 0])])
+    mx = np.min(data[:, 0])
+    maxx = np.max(data[:, 0])
+    if w is not None:
+        plt.plot([mx, maxx], [mx * -w[1] / w[2] - w[0] / w[2],
+                              maxx * -w[1] / w[2] - w[0] / w[2]],
+                 "g", alpha=alpha_choice)
+
+############################################################################
+#            Displaying tools for the Frontiere
+############################################################################
+
+def frontiere(f, X, y, w=None, step=50, alpha_choice=1, colorbar=True,
+                  samples=True):
+    """ trace la frontiere pour la fonction de decision f"""
+    # construct cmap
+
+    min_tot0 = np.min(X[:, 0])
+    min_tot1 = np.min(X[:, 1])
+
+    max_tot0 = np.max(X[:, 0])
+    max_tot1 = np.max(X[:, 1])
+    delta0 = (max_tot0 - min_tot0)
+    delta1 = (max_tot1 - min_tot1)
+    xx, yy = np.meshgrid(np.arange(min_tot0, max_tot0, delta0 / step),
+                         np.arange(min_tot1, max_tot1, delta1 / step))
+    z = np.array([f(vec) for vec in np.c_[xx.ravel(), yy.ravel()]])
+    z = z.reshape(xx.shape)
+    labels = np.unique(z)
+    color_blind_list = sns.color_palette("colorblind", labels.shape[0])
+    sns.set_palette(color_blind_list)
+    my_cmap = ListedColormap(color_blind_list)
+    plt.imshow(z, origin='lower', interpolation="mitchell", alpha=0.80,
+               cmap=my_cmap, extent=[min_tot0, max_tot0, min_tot1, max_tot1])
+    if colorbar is True:
+        ax = plt.gca()
+        cbar = plt.colorbar(ticks=labels)
+        cbar.ax.set_yticklabels(labels)
+
+    labels = np.unique(y)
+    k = np.unique(y).shape[0]
+    color_blind_list = sns.color_palette("colorblind", k)
+    sns.set_palette(color_blind_list)
+    ax = plt.gca()
+    if samples is True:
+        for i, label in enumerate(y):
+            label_num = np.where(labels == label)[0][0]
+            plt.scatter(X[i, 0], X[i, 1], color=color_blind_list[label_num],
+                        s=80, marker=symlist[label_num])
+    plt.xlim([min_tot0, max_tot0])
+    plt.ylim([min_tot1, max_tot1])
+    ax.get_yaxis().set_ticks([])
+    ax.get_xaxis().set_ticks([])
+    if w is not None:
+        plt.plot([min_tot0, max_tot0],
+                 [min_tot0 * -w[1] / w[2] - w[0] / w[2],
+                  max_tot0 * -w[1] / w[2] - w[0] / w[2]],
+                 "k", alpha=alpha_choice)
+
+
+
+```
+
+
+
+# CLASSIFICATION AVEC LES ARBRES
+
+# QUESTION 1
+
+Dans le cadre de la régression, c'est-à-dire lorsqu'on cherche à prédire une valeur numérique pour Y et non une classe, on pourrait utilser le critère MSE comme mesure d'homgénéité. En effet l'erreure quadratique moyenne mesure la distance entre les valeurs réelles et les valeurs prédites. Plus ce dernier est faible, plus les valeures prédites sont proches des valeures réelles.
+
+
+
+On commence par importer les librairies nécessaires.
+```{python}
+#%%
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib import rc
+
+
+from sklearn import tree, datasets
+from tp_arbres_source import (rand_gauss, rand_bi_gauss, rand_tri_gauss,
+                              rand_checkers, rand_clown,
+                              plot_2d, frontiere)
+
+```
+
+```{python}
+rc('font', **{'family': 'sans-serif', 'sans-serif': ['Computer Modern Roman']})
+params = {'axes.labelsize': 6,
+          'font.size': 12,
+          'legend.fontsize': 12,
+          'text.usetex': False,
+          'figure.figsize': (10, 12)}
+plt.rcParams.update(params)
+
+sns.set_context("poster")
+sns.set_palette("colorblind")
+sns.set_style("white")
+_ = sns.axes_style()
+```
+
+
+# QUESTION 2
+
+Nous allons simuler avec rand_checkers des échantillons de tailles n = 456. Afin de bien équilibrer les classes nous prendrons 4 classes chaucune de taille 114.
+
+```{python}
+data = rand_checkers(n1=114, n2=114, n3=114, n4=114, sigma=0.1)
+n_samples = len(data)
+X = data[:, :-1]  
+Y = data[:, -1].astype(int)  
+```
+
+Nous allons dans un premier temps construire nos arbres de décision à l'aide des critères de l'entropie et l'indice de gini puis créer deux courbes illustrant le pourcentage d'erreurs en fonction de la profondeur maximale de l'arbre, l'une pour le critère Gini et l'autre pour l'entropie.
+
+```{python}
+# Q2. Créer deux objets 'arbre de décision' en spécifiant le critère de
+# classification comme l'indice de gini ou l'entropie, avec la
+# fonction 'DecisionTreeClassifier' du module 'tree'.
+
+from sklearn import tree
+
+from sklearn.tree import DecisionTreeClassifier
+
+dt_entropy = DecisionTreeClassifier(criterion='entropy')
+dt_gini = DecisionTreeClassifier(criterion='gini')
+
+data = rand_checkers(n1=114, n2=114, n3=114, n4=114, sigma=0.1)
+n_samples = len(data)
+X = data[:, :-1]  # Toutes les colonnes sauf la dernière
+Y = data[:, -1].astype(int)  # La dernière colonne (étiquettes de classe) en tant qu'entiers
+
+dt_gini.fit(X, Y)
+dt_entropy.fit(X, Y)
+
+print("Gini criterion")
+print(dt_gini.get_params())
+print(dt_gini.score(X, Y))
+
+print("Entropy criterion")
+print(dt_entropy.get_params())
+print(dt_entropy.score(X, Y))
+
+
+# Afficher les scores en fonction du paramètre max_depth
+
+dmax = 12
+scores_entropy = np.zeros(dmax)
+scores_gini = np.zeros(dmax)
+
+plt.figure(figsize=(15, 10))
+for i in range(dmax):
+    # Créez et ajustez un arbre de décision avec le critère d'entropie
+    dt_entropy = tree.DecisionTreeClassifier(criterion='entropy', max_depth=i + 1)
+    dt_entropy.fit(X, Y)
+    scores_entropy[i] = dt_entropy.score(X, Y)
+
+    # Créez et ajustez un arbre de décision avec le critère de Gini
+    dt_gini = tree.DecisionTreeClassifier(criterion='gini', max_depth=i + 1)
+    dt_gini.fit(X, Y)
+    scores_gini[i] = dt_gini.score(X, Y)
+
+    plt.subplot(3, 4, i + 1)
+    frontiere(lambda x: dt_gini.predict(x.reshape((1, -1))), X, Y, step=50, samples=False)
+
+plt.draw()
+
+plt.figure()
+plt.plot(range(1, dmax + 1), scores_entropy, label='Entropy Criterion')
+plt.plot(range(1, dmax + 1), scores_gini, label='Gini Criterion')
+plt.xlabel('Max depth')
+plt.ylabel('Accuracy Score')
+plt.legend()
+plt.draw()
+
+print("Scores with entropy criterion: ", scores_entropy)
+print("Scores with Gini criterion: ", scores_gini)
+```
+
+
+# QUESTION 3
+
+Ci-dessous le code pour afficher la classification obtenue en utilisant la profondeur qui minimise le pourcentage d’erreurs obtenues avec l'entropie:
+```{python}
+
+# Définir des variables pour suivre la meilleure profondeur et le meilleur score d'entropie
+best_depth_entropy = None
+best_score_entropy = 0  # Initialisez-le à 0
+
+# Parcourez différentes valeurs de profondeur
+for depth in range(1, dmax + 1):
+    # Créez et ajustez un arbre de décision avec la profondeur actuelle
+    dt_entropy = tree.DecisionTreeClassifier(criterion='entropy', max_depth=depth)
+    dt_entropy.fit(X, Y)
+
+    # Calculez la précision avec le critère d'entropie
+    accuracy = dt_entropy.score(X, Y)
+
+    # Vérifiez si la précision actuelle est meilleure que la meilleure précision précédente
+    if accuracy > best_score_entropy:
+        best_score_entropy = accuracy
+        best_depth_entropy = depth
+
+# Affichez la classification obtenue avec la meilleure profondeur
+plt.figure()
+frontiere(lambda x: dt_entropy.predict(x.reshape((1, -1))), X, Y, step=100)
+plt.title("Best frontier with entropy criterion (Depth: {})".format(best_depth_entropy))
+plt.draw()
+print("Best depth with entropy criterion: ", best_depth_entropy)
+print("Best score with entropy criterion: ", best_score_entropy)
+
+```
+
+# QUESTION 4
+
+# QUESTION 5 
+
+Nous allons maintenant créer n= 160 = 40 + 40 + 40 + 40 nouvelles données avec rand_checkers. Pour les arbres de décisiosn entrainés précedemment, nous allons calculer la proportion d'erreurs faites sur cet échantillon de test et commenter.
+
+```{python}
+#| code-fold: true
+# Créer un nouvel échantillon de test avec 160 données (40 de chaque classe)
+new_data = rand_checkers(n1=40, n2=40, n3=40, n4=40, sigma=0.1)
+
+# Séparer les caractéristiques et les étiquettes
+X_new = new_data[:, :2]
+Y_new = new_data[:, 2].astype(int)
+
+# Évaluer les modèles sur le nouvel échantillon de test
+error_rate_entropy = 1 - best_tree_entropy.score(X_new, Y_new)
+
+best_tree_gini = DecisionTreeClassifier(criterion="gini", max_depth=best_depth_gini, random_state=0)
+best_tree_gini.fit(X_new, Y_new)
+
+error_rate_gini = 1 - best_tree_gini.score(X_new, Y_new)
+
+print("Proportion d'erreurs sur le nouvel échantillon (Entropy): {:.2f}%".format(error_rate_entropy * 100))
+print("Proportion d'erreurs sur le nouvel échantillon (Gini): {:.2f}%".format(error_rate_gini * 100))
+
+dmax = 12
+scores_entropy = np.zeros(dmax)
+scores_gini = np.zeros(dmax)
+plt.figure(figsize=(15, 10))
+
+for i in range(dmax):
+    
+    # Créer un arbre de décision avec une profondeur maximale variable (entropy)
+    dt_entropy = DecisionTreeClassifier(criterion="entropy", max_depth=i + 1)
+    dt_entropy.fit(X_new, Y_new)
+    scores_entropy[i] = 1 - dt_entropy.score(X_new, Y_new)
+
+    dt_gini = DecisionTreeClassifier(criterion="gini", max_depth = i + 1)
+    dt_gini.fit(X_new, Y_new)
+    scores_gini[i] = 1 - dt_gini.score(X_new, Y_new)
+    
+    plt.subplot(3, 4, i + 1)
+    frontiere(lambda x: dt_gini.predict(x.reshape((1, -1))), X_new, Y_new, step=50, samples=False)
+
+plt.figure()
+plt.plot(range(1, dmax + 1), scores_entropy, label="Entropy Criterion")
+plt.plot(range(1, dmax + 1), scores_gini, label="Gini Criterion")
+plt.xlabel('Max depth')
+plt.ylabel('Error Rate')
+plt.title("Testing error")
+plt.legend()
+plt.show()
+
+print("error proportion with entropy criterion: {:.2f}%".format(error_rate_entropy * 100))
+print("error proportion with entropy Gini: {:.2f}%".format(error_rate_gini * 100))
+
+```
+
+On observe que la proportion d'erreurs est plus importante pour l'arbre de décision basé sur l'entropie que pour celui basé sur l'indice de Gini. 
+On peut alors penser que l'arbre basé sur l'indice de Gini a une précision plus juste pour la prédiction des échantillons de test.
+
+
+# QUESTION 6
+
+Dans cette partie, nous allons reprendre les questions précédentes avec le dataset **DIGITS** :
+
+```{python}
+# Q6. même question avec les données de reconnaissances de texte 'digits'
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn import datasets
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+
+# Importez le jeu de données "digits"
+digits = datasets.load_digits()
+
+# Divisez le jeu de données en un ensemble d'entraînement et un ensemble de test
+X_train, X_test, Y_train, Y_test = train_test_split(digits.data, digits.target, test_size=0.5, random_state=42)
+
+dmax = 12
+scores_entropy = np.zeros(dmax)
+scores_gini = np.zeros(dmax)
+
+plt.figure(figsize=(15, 10))
+
+for i in range(dmax):
+    
+    dt_entropy = DecisionTreeClassifier(criterion='entropy', max_depth=i + 1, random_state=42)
+    dt_entropy.fit(X_train, Y_train)
+    
+    
+    test_accuracy_entropy = dt_entropy.score(X_test, Y_test)
+    scores_entropy[i] = test_accuracy_entropy
+
+
+    dt_gini = DecisionTreeClassifier(criterion='gini', max_depth=i + 1, random_state=42)
+    dt_gini.fit(X_train, Y_train)
+    
+    # Calculez le score de test avec le critère de Gini
+    test_accuracy_gini = dt_gini.score(X_test, Y_test)
+    scores_gini[i] = test_accuracy_gini
+
+# Affichez les scores de test en fonction de la profondeur maximale
+plt.figure()
+plt.plot(range(1, dmax + 1), scores_entropy, label='Entropy Criterion')
+plt.plot(range(1, dmax + 1), scores_gini, label='Gini Criterion')
+plt.xlabel('Max depth')
+plt.ylabel('Accuracy Score')
+plt.title("Testing error for Digits Dataset")
+plt.legend()
+plt.show()
+
+print("Test scores with entropy criterion: ", scores_entropy)
+print("Test scores with Gini criterion: ", scores_gini)
+
+```
+
+
+
+# QUESTION 7
+
+Utilisons la fonction sklearn.cross_validation.cross_val_score et testosn le le jeu de données **digits** en faisant varier la profondeur de l'arbre de décision. On pourra se servir de cette fonction pour choisir la profondeur de l'arbre :
+
+```{python}
+from sklearn.model_selection import cross_val_score
+
+# Profondeurs maximales à tester
+max_depths = np.arange(1, 21, 1)
+
+# scores de validation croisée
+cv_scores = []
+
+# Tester chaque profondeur maximale
+for depth in max_depths:
+    # Initialiser et entraîner l'arbre de décision avec le critère d'Entropy
+    tree_classifier = DecisionTreeClassifier(criterion="entropy", max_depth=depth, random_state=0)
+    
+    # Effectuer une validation croisée avec 5 plis
+    scores = cross_val_score(tree_classifier, X, Y, cv=5)
+    
+    # Calculer la moyenne des scores de validation croisée
+    mean_score = scores.mean()
+    
+    # Ajouter le score moyen à la liste des scores
+    cv_scores.append(mean_score)
+
+# Trouver la meilleure profondeur maximale avec le score le plus élevé
+best_depth_index = cv_scores.index(max(cv_scores))
+best_depth = max_depths[best_depth_index]
+
+
+for depth, score in zip(max_depths, cv_scores):
+    print("Profondeur maximale = {}, Score de validation croisée moyen = {:.4f}".format(depth, score))
+    
+print("Meilleure profondeur maximale (Entropy) = {}, Score de validation croisée moyen = {:.4f}".format(best_depth, max(cv_scores)))
+```
+
+Après obervation de résultats, on conclut dans un premier temps que plus la profondeur maximale augmente, plus de score de validation croisée moyen augemnte également. cependant, on observe que lorsque la profondeur maximale est de 15, les scores moyen de validation croisée restent constant à 0.8125.
+La profondeur de l'arbre préférable serait donc de 15 pour avoir de bonnes prédictions.
