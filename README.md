@@ -13,4 +13,4 @@
 # Installation
 
   Le fichier TP2_ARBRES peut-être ouvert dans un nivagateur. Sinon, le fichier TP2_ARBRES peut-être exécuté dans VScode.
-  Afin de pouvoir compiler le fichier .qmd dans un logiciel adapté assurez-vous d'avoir installer qaurto sur votre ordinateur ainsi qu'une extension Python.
+  Afin de pouvoir compiler le fichier .qmd dans un logiciel adapté assurez-vous d'avoir installer quarto sur votre ordinateur ainsi qu'une extension Python.
